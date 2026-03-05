@@ -1,1 +1,1 @@
-alert(origin)
+fetch("/zbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")

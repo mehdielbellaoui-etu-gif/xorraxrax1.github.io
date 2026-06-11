@@ -1,1 +1,1 @@
-alert(origin)
+alert("haha")

